@@ -1,0 +1,21 @@
+{
+    "name": "Lifting Peanuts",
+    "short_name": "LiftingPeanuts",
+    "start_url": "./workoutapp.html",
+    "display": "standalone",
+    "background_color": "#121212",
+    "theme_color": "#2563eb",
+    "orientation": "portrait",
+    "icons": [
+        {
+            "src": "liftingpeanutsicon.jpg",
+            "sizes": "192x192",
+            "type": "image/jpeg"
+        },
+        {
+            "src": "liftingpeanutsicon.jpg",
+            "sizes": "512x512",
+            "type": "image/jpeg"
+        }
+    ]
+}
