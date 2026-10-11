@@ -17,6 +17,8 @@
             --text-muted: #aaaaaa;
             --border-color: #333333;
             --success-color: #4caf50;
+            --warning-color: #ff9800;
+            --warning-hover: #e68900;
         }
 
         body {
@@ -123,6 +125,19 @@
             background-color: #4b4b4b;
         }
 
+        button.btn-warning {
+            background-color: var(--warning-color);
+            color: white;
+            border: none;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 5px;
+        }
+
+        button.btn-warning:hover {
+            background-color: var(--warning-hover);
+        }
+
         .exercise-item {
             background-color: #2a2a2a;
             padding: 10px;
@@ -184,12 +199,14 @@
                     <select id="selectSplit" onchange="loadDaysForWorkout()"></select>
                 </div>
 
-                <!-- New Share / Import Action Buttons -->
-                <div style="display: flex; gap: 10px; margin-bottom: 5px;">
-                    <button type="button" class="btn-secondary" onclick="triggerImportSplit()">📁 Import Split
-                        File</button>
-                    <button type="button" id="shareSplitBtn" class="btn-secondary hidden"
+                <!-- Action Buttons: Import, Share, Edit Current Split -->
+                <div style="display: flex; gap: 10px; margin-bottom: 5px; flex-wrap: wrap;">
+                    <button type="button" class="btn-secondary" style="flex: 1;" onclick="triggerImportSplit()">📁
+                        Import Split</button>
+                    <button type="button" id="shareSplitBtn" class="btn-secondary hidden" style="flex: 1;"
                         onclick="shareCurrentSplit()">🔗 Share Split</button>
+                    <button type="button" id="editSplitBtn" class="btn-warning hidden" style="flex: 1;"
+                        onclick="editCurrentSplit()">✏️ Edit Split</button>
                 </div>
 
                 <div class="form-group" style="margin-top: 15px;">
@@ -208,7 +225,7 @@
         <!-- BUILDER TAB -->
         <div id="builderTab" class="hidden">
             <div class="card">
-                <h2>Create New Weekly Split</h2>
+                <h2 id="builderTitle">Create New Weekly Split</h2>
                 <div class="form-group">
                     <label for="splitNameInput">Split Name (e.g., "3 Day Beach Muscle Split"):</label>
                     <input type="text" id="splitNameInput" placeholder="Enter split name">
@@ -218,7 +235,9 @@
 
                 <button type="button" onclick="addSessionForm()" style="margin-bottom: 10px;" class="btn-secondary">+
                     Add Session Day</button>
-                <button class="btn-primary" onclick="saveNewSplit()">Save Entire Split</button>
+                <button id="saveSplitBtn" class="btn-primary" onclick="saveSplit()">Save Entire Split</button>
+                <button type="button" id="cancelEditBtn" class="btn-secondary hidden" onclick="cancelEditMode()">Cancel
+                    Edit</button>
             </div>
         </div>
     </div>
@@ -231,6 +250,9 @@
         let splits = JSON.parse(localStorage.getItem('workout_splits')) || {};
         let weightHistory = JSON.parse(localStorage.getItem('workout_weight_history')) || {};
         let currentSessionCount = 0;
+
+        // Tracks the split name currently being edited, null means creation mode
+        let editingSplitName = null;
 
         function saveStorage() {
             localStorage.setItem('workout_splits', JSON.stringify(splits));
@@ -251,59 +273,75 @@
         }
 
         // --- BUILDER LOGIC ---
-        function addSessionForm() {
+        function addSessionForm(dayVal = 'Monday', nameVal = '', exercises = []) {
             currentSessionCount++;
             const container = document.getElementById('sessionsContainer');
             const sessionDiv = document.createElement('div');
             sessionDiv.className = 'card';
             sessionDiv.id = `session_${currentSessionCount}`;
             sessionDiv.innerHTML = `
-      <h3>Session Day ${currentSessionCount}</h3>
-      <div class="form-group">
-        <label>Day of Week:</label>
-        <select class="session-day">
-          <option>Monday</option><option>Tuesday</option><option>Wednesday</option>
-          <option>Thursday</option><option>Friday</option><option>Saturday</option><option>Sunday</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label>Session Name (e.g., Push, Pull, Legs):</label>
-        <input type="text" class="session-name" placeholder="Name">
-      </div>
-      <h4>Exercises</h4>
-      <div class="exercises-list"></div>
-      <button type="button" class="btn-secondary" onclick="addExerciseToSession(${currentSessionCount})" style="margin-top:5px;">+ Add Exercise</button>
-    `;
+                <h3>Session Day ${currentSessionCount}</h3>
+                <div class="form-group">
+                    <label>Day of Week:</label>
+                    <select class="session-day">
+                        <option ${dayVal === 'Monday' ? 'selected' : ''}>Monday</option>
+                        <option ${dayVal === 'Tuesday' ? 'selected' : ''}>Tuesday</option>
+                        <option ${dayVal === 'Wednesday' ? 'selected' : ''}>Wednesday</option>
+                        <option ${dayVal === 'Thursday' ? 'selected' : ''}>Thursday</option>
+                        <option ${dayVal === 'Friday' ? 'selected' : ''}>Friday</option>
+                        <option ${dayVal === 'Saturday' ? 'selected' : ''}>Saturday</option>
+                        <option ${dayVal === 'Sunday' ? 'selected' : ''}>Sunday</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Session Name (e.g., Push, Pull, Legs):</label>
+                    <input type="text" class="session-name" placeholder="Name" value="${nameVal}">
+                </div>
+                <h4>Exercises</h4>
+                <div class="exercises-list"></div>
+                <button type="button" class="btn-secondary" onclick="addExerciseToSession(${currentSessionCount})" style="margin-top:5px;">+ Add Exercise</button>
+            `;
             container.appendChild(sessionDiv);
-            addExerciseToSession(currentSessionCount);
+
+            if (exercises.length > 0) {
+                exercises.forEach(ex => addExerciseToSession(currentSessionCount, ex));
+            } else {
+                addExerciseToSession(currentSessionCount);
+            }
         }
 
-        function addExerciseToSession(sessionId) {
+        function addExerciseToSession(sessionId, exerciseData = null) {
             const list = document.querySelector(`#session_${sessionId} .exercises-list`);
             const exDiv = document.createElement('div');
             exDiv.className = 'exercise-item';
+
+            const exName = exerciseData ? exerciseData.name : '';
+            const exSets = exerciseData ? exerciseData.sets : 3;
+            const exReps = exerciseData ? exerciseData.reps : '10';
+
             exDiv.innerHTML = `
-      <div class="form-group">
-        <label>Exercise Name:</label>
-        <input type="text" class="ex-name" placeholder="e.g. Bench Press">
-      </div>
-      <div style="display:flex; gap:10px;">
-        <div class="form-group" style="flex:1;">
-          <label>Sets:</label>
-          <input type="number" class="ex-sets" value="3" min="1">
-        </div>
-        <div class="form-group" style="flex:1;">
-          <label>Reps Target:</label>
-          <input type="text" class="ex-reps" placeholder="e.g. 8-10 or 10">
-        </div>
-      </div>
-    `;
+                <div class="form-group">
+                    <label>Exercise Name:</label>
+                    <input type="text" class="ex-name" placeholder="e.g. Bench Press" value="${exName}">
+                </div>
+                <div style="display:flex; gap:10px;">
+                    <div class="form-group" style="flex:1;">
+                        <label>Sets:</label>
+                        <input type="number" class="ex-sets" value="${exSets}" min="1">
+                    </div>
+                    <div class="form-group" style="flex:1;">
+                        <label>Reps Target:</label>
+                        <input type="text" class="ex-reps" placeholder="e.g. 8-10 or 10" value="${exReps}">
+                    </div>
+                </div>
+            `;
             list.appendChild(exDiv);
         }
 
-        function saveNewSplit() {
-            const splitName = document.getElementById('splitNameInput').value.trim();
-            if (!splitName) return alert('Please enter a name for the split.');
+        function saveSplit() {
+            const splitNameInputEl = document.getElementById('splitNameInput');
+            const newSplitName = splitNameInputEl.value.trim();
+            if (!newSplitName) return alert('Please enter a name for the split.');
 
             const sessionElements = document.querySelectorAll('#sessionsContainer .card');
             if (sessionElements.length === 0) return alert('Please add at least one session day.');
@@ -322,17 +360,66 @@
                 if (exercises.length > 0) sessions.push({ day, name, exercises });
             });
 
-            splits[splitName] = sessions;
+            if (sessions.length === 0) return alert('Please add at least one valid exercise.');
+
+            // If we are renaming the split during edit, delete the old key entry
+            if (editingSplitName && editingSplitName !== newSplitName) {
+                delete splits[editingSplitName];
+            }
+
+            splits[newSplitName] = sessions;
             saveStorage();
-            alert('Workout split saved successfully!');
-            document.getElementById('splitNameInput').value = '';
+
+            alert(editingSplitName ? 'Workout split updated successfully!' : 'Workout split saved successfully!');
+
+            cancelEditMode(); // Resets form and state back to create mode
+
+            // Switch back to workout tab and select the target split
+            switchTab('workoutTab');
+            document.getElementById('selectSplit').value = newSplitName;
+            loadDaysForWorkout();
+        }
+
+        function editCurrentSplit() {
+            const splitName = document.getElementById('selectSplit').value;
+            if (!splitName || !splits[splitName]) {
+                alert('Please select a valid split to edit.');
+                return;
+            }
+
+            editingSplitName = splitName;
+
+            // Update UI Cues for Edit Mode
+            document.getElementById('builderTitle').innerText = `Editing Split: "${splitName}"`;
+            document.getElementById('saveSplitBtn').innerText = 'Update Split';
+            document.getElementById('cancelEditBtn').classList.remove('hidden');
+
+            // Populate form fields
+            document.getElementById('splitNameInput').value = splitName;
             document.getElementById('sessionsContainer').innerHTML = '';
             currentSessionCount = 0;
 
-            // Switch back to workout tab and select the newly created split
-            switchTab('workoutTab');
-            document.getElementById('selectSplit').value = splitName;
-            loadDaysForWorkout();
+            // Load existing session days into builder
+            splits[splitName].forEach(session => {
+                addSessionForm(session.day, session.name, session.exercises);
+            });
+
+            // Switch to Builder tab
+            switchTab('builderTab');
+            // Highlight Builder button in tabs explicitly
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-btn')[1].classList.add('active');
+        }
+
+        function cancelEditMode() {
+            editingSplitName = null;
+            document.getElementById('builderTitle').innerText = 'Create New Weekly Split';
+            document.getElementById('saveSplitBtn').innerText = 'Save Entire Split';
+            document.getElementById('cancelEditBtn').classList.add('hidden');
+            document.getElementById('splitNameInput').value = '';
+            document.getElementById('sessionsContainer').innerHTML = '';
+            currentSessionCount = 0;
+            addSessionForm(); // Start fresh with one blank session form
         }
 
         // --- WORKOUT LOGIC ---
@@ -345,7 +432,6 @@
                 select.innerHTML += `<option value="${name}">${name}</option>`;
             });
 
-            // Retain selection if it still exists
             if (splits[currentVal]) {
                 select.value = currentVal;
             }
@@ -356,17 +442,20 @@
             const splitName = document.getElementById('selectSplit').value;
             const daySelect = document.getElementById('selectDay');
             const shareBtn = document.getElementById('shareSplitBtn');
+            const editBtn = document.getElementById('editSplitBtn');
 
             daySelect.innerHTML = '<option value="">-- Select a Day --</option>';
             document.getElementById('activeWorkoutArea').classList.add('hidden');
 
             if (splitName && splits[splitName]) {
-                shareBtn.classList.remove('hidden'); // Show share button when a split is active
+                shareBtn.classList.remove('hidden');
+                editBtn.classList.remove('hidden');
                 splits[splitName].forEach((s, index) => {
                     daySelect.innerHTML += `<option value="${index}">${s.day} - ${s.name}</option>`;
                 });
             } else {
-                shareBtn.classList.add('hidden'); // Hide share button if no valid split selected
+                shareBtn.classList.add('hidden');
+                editBtn.classList.add('hidden');
             }
         }
 
@@ -395,18 +484,18 @@
                     const tag = lastWeight ? `<span class="last-weight-tag">(Prev: ${lastWeight} lbs)</span>` : '';
 
                     setsHTML += `
-          <div class="set-row">
-            <label>Set ${s}: ${tag}</label>
-            <input type="number" data-key="${historyKey}" class="weight-input" placeholder="Weight" value="${lastWeight}">
-            <input type="checkbox">
-          </div>
-        `;
+                        <div class="set-row">
+                            <label>Set ${s}: ${tag}</label>
+                            <input type="number" data-key="${historyKey}" class="weight-input" placeholder="Weight" value="${lastWeight}">
+                            <input type="checkbox">
+                        </div>
+                    `;
                 }
 
                 card.innerHTML = `
-        <strong>${ex.name}</strong> <span style="font-size:13px; color:var(--text-muted);">(${ex.sets} sets x ${ex.reps} reps)</span>
-        ${setsHTML}
-      `;
+                    <strong>${ex.name}</strong> <span style="font-size:13px; color:var(--text-muted);">(${ex.sets} sets x ${ex.reps} reps)</span>
+                    ${setsHTML}
+                `;
                 container.appendChild(card);
             });
 
@@ -440,12 +529,9 @@
             reader.onload = (e) => {
                 try {
                     const importedData = JSON.parse(e.target.result);
-
-                    // Expecting either a direct split array object or a wrapped named object
                     let splitName = importedData.name;
                     let splitSessions = importedData.days || importedData.sessions;
 
-                    // Alternative structure check if format saves as { "Split Name": [...] }
                     if (!splitName && typeof importedData === 'object') {
                         const keys = Object.keys(importedData);
                         if (keys.length === 1 && Array.isArray(importedData[keys[0]])) {
@@ -458,11 +544,9 @@
                         throw new Error('Invalid split file structure.');
                     }
 
-                    // Save into splits dictionary
                     splits[splitName] = splitSessions;
                     saveStorage();
 
-                    // Refresh UI and auto-select the new split
                     populateSplitDropdown();
                     document.getElementById('selectSplit').value = splitName;
                     loadDaysForWorkout();
@@ -472,7 +556,7 @@
                     alert('Could not import split file. The file format is invalid.');
                     console.error(err);
                 } finally {
-                    event.target.value = ''; // Reset file input
+                    event.target.value = '';
                 }
             };
             reader.readAsText(file);
@@ -485,7 +569,6 @@
                 return;
             }
 
-            // Wrap the split cleanly in an export object format
             const exportData = {
                 name: splitName,
                 days: splits[splitName]
@@ -496,7 +579,6 @@
             const safeFilename = `${splitName.toLowerCase().replace(/[^a-z0-9]/g, '-')}-split.json`;
             const file = new File([blob], safeFilename, { type: 'application/json' });
 
-            // Use native Web Share API if supported (mobile devices / PWAs)
             if (navigator.canShare && navigator.canShare({ files: [file] })) {
                 try {
                     await navigator.share({
@@ -506,12 +588,11 @@
                     });
                     return;
                 } catch (err) {
-                    if (err.name === 'AbortError') return; // User cancelled share dialog
+                    if (err.name === 'AbortError') return;
                     console.warn('Web share failed, falling back to download:', err);
                 }
             }
 
-            // Fallback: Trigger direct file download for desktop browsers
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
@@ -524,7 +605,9 @@
 
         // Initialize
         populateSplitDropdown();
-        if (Object.keys(splits).length === 0) addSessionForm();
+        if (Object.keys(splits).length === 0) {
+            addSessionForm();
+        }
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
