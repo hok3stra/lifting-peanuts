@@ -7,6 +7,8 @@
     <title>Lifting Peanuts</title>
     <!-- PWA Manifest Link -->
     <link rel="manifest" href="./manifest.json">
+    <!-- Chart.js for Visualizations -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {
             --bg-color: #121212;
@@ -53,20 +55,21 @@
 
         .nav-tabs {
             display: flex;
-            gap: 10px;
+            gap: 5px;
             margin-bottom: 20px;
         }
 
         .tab-btn {
             flex: 1;
-            padding: 12px;
+            padding: 10px 5px;
             background-color: var(--card-bg);
             border: 1px solid var(--border-color);
             color: var(--text-color);
             border-radius: 6px;
             cursor: pointer;
-            font-size: 16px;
+            font-size: 14px;
             font-weight: bold;
+            text-align: center;
         }
 
         .tab-btn.active {
@@ -88,6 +91,7 @@
 
         input,
         select,
+        textarea,
         button {
             width: 100%;
             padding: 10px;
@@ -97,6 +101,11 @@
             color: var(--text-color);
             box-sizing: border-box;
             font-size: 15px;
+        }
+
+        textarea {
+            resize: vertical;
+            height: 70px;
         }
 
         button.btn-primary {
@@ -178,6 +187,26 @@
             color: var(--accent-color);
             margin-left: 5px;
         }
+
+        .timer-display {
+            font-size: 18px;
+            font-weight: bold;
+            color: var(--accent-color);
+            text-align: center;
+            margin-bottom: 15px;
+            background: #252525;
+            padding: 8px;
+            border-radius: 6px;
+        }
+
+        .history-item {
+            background-color: #252525;
+            border: 1px solid var(--border-color);
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
     </style>
 </head>
 
@@ -189,6 +218,7 @@
         <div class="nav-tabs">
             <button class="tab-btn active" onclick="switchTab('workoutTab', event)">Workout</button>
             <button class="tab-btn" onclick="switchTab('builderTab', event)">Split Builder</button>
+            <button class="tab-btn" onclick="switchTab('historyTab', event)">History & Insights</button>
         </div>
 
         <!-- WORKOUT TAB -->
@@ -199,7 +229,6 @@
                     <select id="selectSplit" onchange="loadDaysForWorkout()"></select>
                 </div>
 
-                <!-- Action Buttons: Import, Share, Edit Current Split -->
                 <div style="display: flex; gap: 10px; margin-bottom: 5px; flex-wrap: wrap;">
                     <button type="button" class="btn-secondary" style="flex: 1;" onclick="triggerImportSplit()">📁
                         Import Split</button>
@@ -211,13 +240,34 @@
 
                 <div class="form-group" style="margin-top: 15px;">
                     <label for="selectDay">Select Session / Day:</label>
-                    <select id="selectDay" onchange="renderActiveWorkout()"></select>
+                    <select id="selectDay" onchange="startActiveWorkoutSession()"></select>
                 </div>
             </div>
 
             <div id="activeWorkoutArea" class="card hidden">
                 <h2 id="activeDayTitle">Workout</h2>
+                <div id="timerDisplay" class="timer-display">Duration: 00:00</div>
                 <div id="activeExercisesList"></div>
+
+                <div class="card" style="background-color: #252525; margin-top: 20px;">
+                    <h3>Post-Workout Reflection</h3>
+                    <div class="form-group">
+                        <label for="preWorkoutMeal">What did you eat before your workout?</label>
+                        <textarea id="preWorkoutMeal"
+                            placeholder="e.g., Oatmeal with banana and protein shake"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="workoutFeel">How did this workout feel?</label>
+                        <select id="workoutFeel">
+                            <option value="5">🔥 Amazing / PR Energized</option>
+                            <option value="4" selected>💪 Good / Solid session</option>
+                            <option value="3">😐 Average / Got through it</option>
+                            <option value="2">🥱 Sluggish / Low energy</option>
+                            <option value="1">🔋 Exhausted / Terrible</option>
+                        </select>
+                    </div>
+                </div>
+
                 <button class="btn-primary" onclick="finishWorkout()">Complete Workout</button>
             </div>
         </div>
@@ -240,6 +290,22 @@
                     Edit</button>
             </div>
         </div>
+
+        <!-- HISTORY & INSIGHTS TAB -->
+        <div id="historyTab" class="hidden">
+            <div class="card">
+                <h2>Food vs. Workout Feel Insights</h2>
+                <p style="font-size: 13px; color: var(--text-muted); text-align: center; margin-bottom: 15px;">
+                    Average feel score (1-5) grouped by pre-workout food.
+                </p>
+                <div style="background: #252525; padding: 10px; border-radius: 6px; margin-bottom: 20px;">
+                    <canvas id="workoutChart" style="width: 100%; max-height: 250px;"></canvas>
+                </div>
+
+                <h3>Past Workouts Log</h3>
+                <div id="historyListContainer"></div>
+            </div>
+        </div>
     </div>
 
     <!-- Hidden File Input for Importing Splits -->
@@ -249,19 +315,24 @@
     <script>
         let splits = JSON.parse(localStorage.getItem('workout_splits')) || {};
         let weightHistory = JSON.parse(localStorage.getItem('workout_weight_history')) || {};
-        let currentSessionCount = 0;
+        let workoutHistoryLogs = JSON.parse(localStorage.getItem('workout_history_logs')) || [];
 
-        // Tracks the split name currently being edited, null means creation mode
+        let currentSessionCount = 0;
         let editingSplitName = null;
+        let workoutStartTime = null;
+        let timerInterval = null;
+        let workoutChartInstance = null;
 
         function saveStorage() {
             localStorage.setItem('workout_splits', JSON.stringify(splits));
             localStorage.setItem('workout_weight_history', JSON.stringify(weightHistory));
+            localStorage.setItem('workout_history_logs', JSON.stringify(workoutHistoryLogs));
         }
 
         function switchTab(tabId, evt) {
             document.getElementById('workoutTab').classList.add('hidden');
             document.getElementById('builderTab').classList.add('hidden');
+            document.getElementById('historyTab').classList.add('hidden');
             document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
 
             document.getElementById(tabId).classList.remove('hidden');
@@ -270,6 +341,7 @@
             }
 
             if (tabId === 'workoutTab') populateSplitDropdown();
+            if (tabId === 'historyTab') renderHistoryAndCharts();
         }
 
         // --- BUILDER LOGIC ---
@@ -362,7 +434,6 @@
 
             if (sessions.length === 0) return alert('Please add at least one valid exercise.');
 
-            // If we are renaming the split during edit, delete the old key entry
             if (editingSplitName && editingSplitName !== newSplitName) {
                 delete splits[editingSplitName];
             }
@@ -371,10 +442,8 @@
             saveStorage();
 
             alert(editingSplitName ? 'Workout split updated successfully!' : 'Workout split saved successfully!');
+            cancelEditMode();
 
-            cancelEditMode(); // Resets form and state back to create mode
-
-            // Switch back to workout tab and select the target split
             switchTab('workoutTab');
             document.getElementById('selectSplit').value = newSplitName;
             loadDaysForWorkout();
@@ -388,25 +457,19 @@
             }
 
             editingSplitName = splitName;
-
-            // Update UI Cues for Edit Mode
             document.getElementById('builderTitle').innerText = `Editing Split: "${splitName}"`;
             document.getElementById('saveSplitBtn').innerText = 'Update Split';
             document.getElementById('cancelEditBtn').classList.remove('hidden');
 
-            // Populate form fields
             document.getElementById('splitNameInput').value = splitName;
             document.getElementById('sessionsContainer').innerHTML = '';
             currentSessionCount = 0;
 
-            // Load existing session days into builder
             splits[splitName].forEach(session => {
                 addSessionForm(session.day, session.name, session.exercises);
             });
 
-            // Switch to Builder tab
             switchTab('builderTab');
-            // Highlight Builder button in tabs explicitly
             document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
             document.querySelectorAll('.tab-btn')[1].classList.add('active');
         }
@@ -419,7 +482,7 @@
             document.getElementById('splitNameInput').value = '';
             document.getElementById('sessionsContainer').innerHTML = '';
             currentSessionCount = 0;
-            addSessionForm(); // Start fresh with one blank session form
+            addSessionForm();
         }
 
         // --- WORKOUT LOGIC ---
@@ -446,6 +509,7 @@
 
             daySelect.innerHTML = '<option value="">-- Select a Day --</option>';
             document.getElementById('activeWorkoutArea').classList.add('hidden');
+            stopWorkoutTimer();
 
             if (splitName && splits[splitName]) {
                 shareBtn.classList.remove('hidden');
@@ -459,7 +523,7 @@
             }
         }
 
-        function renderActiveWorkout() {
+        function startActiveWorkoutSession() {
             const splitName = document.getElementById('selectSplit').value;
             const dayIndex = document.getElementById('selectDay').value;
             const container = document.getElementById('activeExercisesList');
@@ -467,13 +531,14 @@
 
             if (splitName === '' || dayIndex === '') {
                 document.getElementById('activeWorkoutArea').classList.add('hidden');
+                stopWorkoutTimer();
                 return;
             }
 
             const session = splits[splitName][dayIndex];
             document.getElementById('activeDayTitle').innerText = `${session.day}: ${session.name}`;
 
-            session.exercises.forEach((ex, exIdx) => {
+            session.exercises.forEach((ex) => {
                 const card = document.createElement('div');
                 card.className = 'exercise-item';
                 let setsHTML = '';
@@ -499,10 +564,41 @@
                 container.appendChild(card);
             });
 
+            document.getElementById('preWorkoutMeal').value = '';
+            document.getElementById('workoutFeel').value = '4';
             document.getElementById('activeWorkoutArea').classList.remove('hidden');
+
+            startWorkoutTimer();
+        }
+
+        function startWorkoutTimer() {
+            stopWorkoutTimer();
+            workoutStartTime = new Date();
+            updateTimerDisplay();
+            timerInterval = setInterval(updateTimerDisplay, 1000);
+        }
+
+        function stopWorkoutTimer() {
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
+        }
+
+        function updateTimerDisplay() {
+            if (!workoutStartTime) return;
+            const now = new Date();
+            const elapsedSeconds = Math.floor((now - workoutStartTime) / 1000);
+            const mins = Math.floor(elapsedSeconds / 60).toString().padStart(2, '0');
+            const secs = (elapsedSeconds % 60).toString().padStart(2, '0');
+            document.getElementById('timerDisplay').innerText = `Duration: ${mins}:${secs}`;
         }
 
         function finishWorkout() {
+            if (!workoutStartTime) return;
+            const endTime = new Date();
+            const durationMinutes = Math.round((endTime - workoutStartTime) / 60000 * 10) / 10;
+
             const inputs = document.querySelectorAll('.weight-input');
             inputs.forEach(input => {
                 const key = input.getAttribute('data-key');
@@ -510,10 +606,120 @@
                 if (val !== '') weightHistory[key] = val;
             });
 
+            const preMeal = document.getElementById('preWorkoutMeal').value.trim().toLowerCase() || 'none specified';
+            const feelScore = parseInt(document.getElementById('workoutFeel').value) || 3;
+            const splitName = document.getElementById('selectSplit').value;
+            const dayIndex = document.getElementById('selectDay').value;
+            const sessionObj = splits[splitName][dayIndex];
+
+            const logEntry = {
+                date: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                workoutName: `${splitName} (${sessionObj.day}: ${sessionObj.name})`,
+                durationMinutes: durationMinutes,
+                preWorkoutMeal: preMeal,
+                feelScore: feelScore
+            };
+
+            workoutHistoryLogs.unshift(logEntry);
             saveStorage();
-            alert('Workout completed and weight entries saved!');
+            stopWorkoutTimer();
+
+            alert('Workout completed, duration saved, and answers recorded!');
             document.getElementById('selectDay').value = '';
-            renderActiveWorkout();
+            document.getElementById('activeWorkoutArea').classList.add('hidden');
+        }
+
+        // --- HISTORY & INSIGHTS LOGIC ---
+        function renderHistoryAndCharts() {
+            const container = document.getElementById('historyListContainer');
+            container.innerHTML = '';
+
+            if (workoutHistoryLogs.length === 0) {
+                container.innerHTML = '<p style="text-align:center; color:var(--text-muted);">No completed workouts yet. Complete a workout to see history and analytics!</p>';
+                if (workoutChartInstance) workoutChartInstance.destroy();
+                return;
+            }
+
+            workoutHistoryLogs.forEach(log => {
+                let feelEmoji = '😐';
+                if (log.feelScore === 5) feelEmoji = '🔥';
+                else if (log.feelScore === 4) feelEmoji = '💪';
+                else if (log.feelScore === 2) feelEmoji = '🥱';
+                else if (log.feelScore === 1) feelEmoji = '🔋';
+
+                const div = document.createElement('div');
+                div.className = 'history-item';
+                div.innerHTML = `
+                    <strong>${log.workoutName}</strong><br>
+                    <span style="color: var(--text-muted); font-size:12px;">${log.date}</span>
+                    <div style="margin-top: 5px;">
+                        ⏱️ <strong>Duration:</strong> ${log.durationMinutes} mins &nbsp;|&nbsp; 
+                        ${feelEmoji} <strong>Feel Score:</strong> ${log.feelScore}/5
+                    </div>
+                    <div style="margin-top: 4px;">
+                        🥗 <strong>Pre-workout meal:</strong> ${log.preWorkoutMeal}
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+
+            renderFoodCorrelationChart();
+        }
+
+        function renderFoodCorrelationChart() {
+            const ctx = document.getElementById('workoutChart').getContext('2d');
+            if (workoutChartInstance) {
+                workoutChartInstance.destroy();
+            }
+
+            // Aggregate feel scores by pre-workout food entry
+            const foodStats = {};
+            workoutHistoryLogs.forEach(log => {
+                const food = log.preWorkoutMeal || 'Unknown';
+                if (!foodStats[food]) {
+                    foodStats[food] = { totalScore: 0, count: 0 };
+                }
+                foodStats[food].totalScore += log.feelScore;
+                foodStats[food].count += 1;
+            });
+
+            const foodLabels = Object.keys(foodStats);
+            const averageScores = foodLabels.map(food => (foodStats[food].totalScore / foodStats[food].count).toFixed(1));
+
+            workoutChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: foodLabels,
+                    datasets: [{
+                        label: 'Average Feel Score (1-5)',
+                        data: averageScores,
+                        backgroundColor: 'rgba(0, 173, 181, 0.6)',
+                        borderColor: '#00adb5',
+                        borderWidth: 1,
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 5,
+                            title: { display: true, text: 'Avg Feel Score', color: '#aaaaaa' },
+                            grid: { color: '#333333' },
+                            ticks: { color: '#aaaaaa', stepSize: 1 }
+                        },
+                        x: {
+                            ticks: { color: '#aaaaaa' },
+                            grid: { color: '#333333' }
+                        }
+                    },
+                    plugins: {
+                        legend: { labels: { color: '#eeeeee' } }
+                    }
+                }
+            });
         }
 
         // --- SHARE & IMPORT LOGIC ---
