@@ -1,7 +1,7 @@
 {
     "name": "Lifting Peanuts",
     "short_name": "LiftingPeanuts",
-    "start_url": "./workoutapp.html",
+    "start_url": "./index.html",
     "display": "standalone",
     "background_color": "#121212",
     "theme_color": "#2563eb",
