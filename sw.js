@@ -1,11 +1,11 @@
 const CACHE_NAME = 'workout-app-v1';
 const ASSETS_TO_CACHE = [
     './',
-    './workoutapp.html',
+    './index.html',
     // Add your CSS, JS, and audio/image assets here as needed
     './manifest.json',
-    './icon-192.jpg',
-    './icon-512.jpg'
+    './liftingpeanutsicon.jpg',
+    './liftingpeanutsicon.jpg'
 ];
 
 // Install event - caching assets
