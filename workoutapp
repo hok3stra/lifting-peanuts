@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lifting Peanuts App</title>
+    <style>
+        :root {
+            --bg-color: #121212;
+            --card-bg: #1e1e1e;
+            --accent-color: #00adb5;
+            --accent-hover: #008c93;
+            --text-color: #eeeeee;
+            --text-muted: #aaaaaa;
+            --border-color: #333333;
+            --success-color: #4caf50;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 600px;
+        }
+
+        h1,
+        h2,
+        h3 {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .nav-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 12px;
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+        }
+
+        .tab-btn.active {
+            background-color: var(--accent-color);
+            color: #fff;
+            border-color: var(--accent-color);
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 14px;
+            color: var(--text-muted);
+        }
+
+        input,
+        select,
+        button {
+            width: 100%;
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+            background-color: #2b2b2b;
+            color: var(--text-color);
+            box-sizing: border-box;
+            font-size: 15px;
+        }
+
+        button.btn-primary {
+            background-color: var(--accent-color);
+            color: white;
+            border: none;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+
+        button.btn-primary:hover {
+            background-color: var(--accent-hover);
+        }
+
+        button.btn-secondary {
+            background-color: #3b3b3b;
+            color: white;
+            border: none;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 5px;
+        }
+
+        button.btn-secondary:hover {
+            background-color: #4b4b4b;
+        }
+
+        .exercise-item {
+            background-color: #2a2a2a;
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            border-left: 4px solid var(--accent-color);
+        }
+
+        .set-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 8px;
+        }
+
+        .set-row label {
+            margin: 0;
+            width: 60px;
+        }
+
+        .set-row input[type="number"] {
+            flex: 1;
+        }
+
+        .set-row input[type="checkbox"] {
+            width: 24px;
+            height: 24px;
+            accent-color: var(--success-color);
+            cursor: pointer;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .last-weight-tag {
+            font-size: 12px;
+            color: var(--accent-color);
+            margin-left: 5px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <h1>Lifting Peanuts</h1>
+
+        <div class="nav-tabs">
+            <button class="tab-btn active" onclick="switchTab('workoutTab', event)">Workout</button>
+            <button class="tab-btn" onclick="switchTab('builderTab', event)">Split Builder</button>
+        </div>
+
+        <!-- WORKOUT TAB -->
+        <div id="workoutTab">
+            <div class="card">
+                <div class="form-group">
+                    <label for="selectSplit">Select Split:</label>
+                    <select id="selectSplit" onchange="loadDaysForWorkout()"></select>
+                </div>
+
+                <!-- New Share / Import Action Buttons -->
+                <div style="display: flex; gap: 10px; margin-bottom: 5px;">
+                    <button type="button" class="btn-secondary" onclick="triggerImportSplit()">📁 Import Split
+                        File</button>
+                    <button type="button" id="shareSplitBtn" class="btn-secondary hidden"
+                        onclick="shareCurrentSplit()">🔗 Share Split</button>
+                </div>
+
+                <div class="form-group" style="margin-top: 15px;">
+                    <label for="selectDay">Select Session / Day:</label>
+                    <select id="selectDay" onchange="renderActiveWorkout()"></select>
+                </div>
+            </div>
+
+            <div id="activeWorkoutArea" class="card hidden">
+                <h2 id="activeDayTitle">Workout</h2>
+                <div id="activeExercisesList"></div>
+                <button class="btn-primary" onclick="finishWorkout()">Complete Workout</button>
+            </div>
+        </div>
+
+        <!-- BUILDER TAB -->
+        <div id="builderTab" class="hidden">
+            <div class="card">
+                <h2>Create New Weekly Split</h2>
+                <div class="form-group">
+                    <label for="splitNameInput">Split Name (e.g., "3 Day Beach Muscle Split"):</label>
+                    <input type="text" id="splitNameInput" placeholder="Enter split name">
+                </div>
+
+                <div id="sessionsContainer"></div>
+
+                <button type="button" onclick="addSessionForm()" style="margin-bottom: 10px;" class="btn-secondary">+
+                    Add Session Day</button>
+                <button class="btn-primary" onclick="saveNewSplit()">Save Entire Split</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden File Input for Importing Splits -->
+    <input type="file" id="importFileInput" accept=".json,application/json" class="hidden"
+        onchange="handleFileImport(event)">
+
+    <script>
+        let splits = JSON.parse(localStorage.getItem('workout_splits')) || {};
+        let weightHistory = JSON.parse(localStorage.getItem('workout_weight_history')) || {};
+        let currentSessionCount = 0;
+
+        function saveStorage() {
+            localStorage.setItem('workout_splits', JSON.stringify(splits));
+            localStorage.setItem('workout_weight_history', JSON.stringify(weightHistory));
+        }
+
+        function switchTab(tabId, evt) {
+            document.getElementById('workoutTab').classList.add('hidden');
+            document.getElementById('builderTab').classList.add('hidden');
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+
+            document.getElementById(tabId).classList.remove('hidden');
+            if (evt && evt.target) {
+                evt.target.classList.add('active');
+            }
+
+            if (tabId === 'workoutTab') populateSplitDropdown();
+        }
+
+        // --- BUILDER LOGIC ---
+        function addSessionForm() {
+            currentSessionCount++;
+            const container = document.getElementById('sessionsContainer');
+            const sessionDiv = document.createElement('div');
+            sessionDiv.className = 'card';
+            sessionDiv.id = `session_${currentSessionCount}`;
+            sessionDiv.innerHTML = `
+      <h3>Session Day ${currentSessionCount}</h3>
+      <div class="form-group">
+        <label>Day of Week:</label>
+        <select class="session-day">
+          <option>Monday</option><option>Tuesday</option><option>Wednesday</option>
+          <option>Thursday</option><option>Friday</option><option>Saturday</option><option>Sunday</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Session Name (e.g., Push, Pull, Legs):</label>
+        <input type="text" class="session-name" placeholder="Name">
+      </div>
+      <h4>Exercises</h4>
+      <div class="exercises-list"></div>
+      <button type="button" class="btn-secondary" onclick="addExerciseToSession(${currentSessionCount})" style="margin-top:5px;">+ Add Exercise</button>
+    `;
+            container.appendChild(sessionDiv);
+            addExerciseToSession(currentSessionCount);
+        }
+
+        function addExerciseToSession(sessionId) {
+            const list = document.querySelector(`#session_${sessionId} .exercises-list`);
+            const exDiv = document.createElement('div');
+            exDiv.className = 'exercise-item';
+            exDiv.innerHTML = `
+      <div class="form-group">
+        <label>Exercise Name:</label>
+        <input type="text" class="ex-name" placeholder="e.g. Bench Press">
+      </div>
+      <div style="display:flex; gap:10px;">
+        <div class="form-group" style="flex:1;">
+          <label>Sets:</label>
+          <input type="number" class="ex-sets" value="3" min="1">
+        </div>
+        <div class="form-group" style="flex:1;">
+          <label>Reps Target:</label>
+          <input type="text" class="ex-reps" placeholder="e.g. 8-10 or 10">
+        </div>
+      </div>
+    `;
+            list.appendChild(exDiv);
+        }
+
+        function saveNewSplit() {
+            const splitName = document.getElementById('splitNameInput').value.trim();
+            if (!splitName) return alert('Please enter a name for the split.');
+
+            const sessionElements = document.querySelectorAll('#sessionsContainer .card');
+            if (sessionElements.length === 0) return alert('Please add at least one session day.');
+
+            const sessions = [];
+            sessionElements.forEach(sEl => {
+                const day = sEl.querySelector('.session-day').value;
+                const name = sEl.querySelector('.session-name').value.trim() || 'Workout';
+                const exercises = [];
+                sEl.querySelectorAll('.exercise-item').forEach(exEl => {
+                    const exName = exEl.querySelector('.ex-name').value.trim();
+                    const sets = parseInt(exEl.querySelector('.ex-sets').value) || 1;
+                    const reps = exEl.querySelector('.ex-reps').value.trim() || '10';
+                    if (exName) exercises.push({ name: exName, sets, reps });
+                });
+                if (exercises.length > 0) sessions.push({ day, name, exercises });
+            });
+
+            splits[splitName] = sessions;
+            saveStorage();
+            alert('Workout split saved successfully!');
+            document.getElementById('splitNameInput').value = '';
+            document.getElementById('sessionsContainer').innerHTML = '';
+            currentSessionCount = 0;
+
+            // Switch back to workout tab and select the newly created split
+            switchTab('workoutTab');
+            document.getElementById('selectSplit').value = splitName;
+            loadDaysForWorkout();
+        }
+
+        // --- WORKOUT LOGIC ---
+        function populateSplitDropdown() {
+            const select = document.getElementById('selectSplit');
+            const currentVal = select.value;
+            select.innerHTML = '<option value="">-- Select a Split --</option>';
+
+            Object.keys(splits).forEach(name => {
+                select.innerHTML += `<option value="${name}">${name}</option>`;
+            });
+
+            // Retain selection if it still exists
+            if (splits[currentVal]) {
+                select.value = currentVal;
+            }
+            loadDaysForWorkout();
+        }
+
+        function loadDaysForWorkout() {
+            const splitName = document.getElementById('selectSplit').value;
+            const daySelect = document.getElementById('selectDay');
+            const shareBtn = document.getElementById('shareSplitBtn');
+
+            daySelect.innerHTML = '<option value="">-- Select a Day --</option>';
+            document.getElementById('activeWorkoutArea').classList.add('hidden');
+
+            if (splitName && splits[splitName]) {
+                shareBtn.classList.remove('hidden'); // Show share button when a split is active
+                splits[splitName].forEach((s, index) => {
+                    daySelect.innerHTML += `<option value="${index}">${s.day} - ${s.name}</option>`;
+                });
+            } else {
+                shareBtn.classList.add('hidden'); // Hide share button if no valid split selected
+            }
+        }
+
+        function renderActiveWorkout() {
+            const splitName = document.getElementById('selectSplit').value;
+            const dayIndex = document.getElementById('selectDay').value;
+            const container = document.getElementById('activeExercisesList');
+            container.innerHTML = '';
+
+            if (splitName === '' || dayIndex === '') {
+                document.getElementById('activeWorkoutArea').classList.add('hidden');
+                return;
+            }
+
+            const session = splits[splitName][dayIndex];
+            document.getElementById('activeDayTitle').innerText = `${session.day}: ${session.name}`;
+
+            session.exercises.forEach((ex, exIdx) => {
+                const card = document.createElement('div');
+                card.className = 'exercise-item';
+                let setsHTML = '';
+
+                for (let s = 1; s <= ex.sets; s++) {
+                    const historyKey = `${ex.name}_Set_${s}`;
+                    const lastWeight = weightHistory[historyKey] || '';
+                    const tag = lastWeight ? `<span class="last-weight-tag">(Prev: ${lastWeight} lbs)</span>` : '';
+
+                    setsHTML += `
+          <div class="set-row">
+            <label>Set ${s}: ${tag}</label>
+            <input type="number" data-key="${historyKey}" class="weight-input" placeholder="Weight" value="${lastWeight}">
+            <input type="checkbox">
+          </div>
+        `;
+                }
+
+                card.innerHTML = `
+        <strong>${ex.name}</strong> <span style="font-size:13px; color:var(--text-muted);">(${ex.sets} sets x ${ex.reps} reps)</span>
+        ${setsHTML}
+      `;
+                container.appendChild(card);
+            });
+
+            document.getElementById('activeWorkoutArea').classList.remove('hidden');
+        }
+
+        function finishWorkout() {
+            const inputs = document.querySelectorAll('.weight-input');
+            inputs.forEach(input => {
+                const key = input.getAttribute('data-key');
+                const val = input.value.trim();
+                if (val !== '') weightHistory[key] = val;
+            });
+
+            saveStorage();
+            alert('Workout completed and weight entries saved!');
+            document.getElementById('selectDay').value = '';
+            renderActiveWorkout();
+        }
+
+        // --- SHARE & IMPORT LOGIC ---
+        function triggerImportSplit() {
+            document.getElementById('importFileInput').click();
+        }
+
+        function handleFileImport(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const importedData = JSON.parse(e.target.result);
+
+                    // Expecting either a direct split array object or a wrapped named object
+                    let splitName = importedData.name;
+                    let splitSessions = importedData.days || importedData.sessions;
+
+                    // Alternative structure check if format saves as { "Split Name": [...] }
+                    if (!splitName && typeof importedData === 'object') {
+                        const keys = Object.keys(importedData);
+                        if (keys.length === 1 && Array.isArray(importedData[keys[0]])) {
+                            splitName = keys[0];
+                            splitSessions = importedData[keys[0]];
+                        }
+                    }
+
+                    if (!splitName || !Array.isArray(splitSessions)) {
+                        throw new Error('Invalid split file structure.');
+                    }
+
+                    // Save into splits dictionary
+                    splits[splitName] = splitSessions;
+                    saveStorage();
+
+                    // Refresh UI and auto-select the new split
+                    populateSplitDropdown();
+                    document.getElementById('selectSplit').value = splitName;
+                    loadDaysForWorkout();
+
+                    alert(`Successfully imported workout split: "${splitName}"!`);
+                } catch (err) {
+                    alert('Could not import split file. The file format is invalid.');
+                    console.error(err);
+                } finally {
+                    event.target.value = ''; // Reset file input
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        async function shareCurrentSplit() {
+            const splitName = document.getElementById('selectSplit').value;
+            if (!splitName || !splits[splitName]) {
+                alert('Please select a split to share first.');
+                return;
+            }
+
+            // Wrap the split cleanly in an export object format
+            const exportData = {
+                name: splitName,
+                days: splits[splitName]
+            };
+
+            const jsonString = JSON.stringify(exportData, null, 2);
+            const blob = new Blob([jsonString], { type: 'application/json' });
+            const safeFilename = `${splitName.toLowerCase().replace(/[^a-z0-9]/g, '-')}-split.json`;
+            const file = new File([blob], safeFilename, { type: 'application/json' });
+
+            // Use native Web Share API if supported (mobile devices / PWAs)
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                try {
+                    await navigator.share({
+                        title: `Workout Split: ${splitName}`,
+                        text: `Check out my custom workout split "${splitName}" for Lifting Peanuts!`,
+                        files: [file]
+                    });
+                    return;
+                } catch (err) {
+                    if (err.name === 'AbortError') return; // User cancelled share dialog
+                    console.warn('Web share failed, falling back to download:', err);
+                }
+            }
+
+            // Fallback: Trigger direct file download for desktop browsers
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = safeFilename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        // Initialize
+        populateSplitDropdown();
+        if (Object.keys(splits).length === 0) addSessionForm();
+    </script>
+</body>
+
+</html>
