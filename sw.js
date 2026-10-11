@@ -4,8 +4,8 @@ const ASSETS_TO_CACHE = [
     './index.html',
     // Add your CSS, JS, and audio/image assets here as needed
     './manifest.json',
-    './liftingpeanutsicon.jpg',
-    './liftingpeanutsicon.jpg'
+    './liftingpeanutsicon.png',
+    './liftingpeanutsicon.png'
 ];
 
 // Install event - caching assets
